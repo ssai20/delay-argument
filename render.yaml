@@ -8,12 +8,9 @@ services:
     dockerContext: .
     envVars:
       - key: RESULTS_DIR
-        value: /opt/render/data/results
+        value: /tmp/results  # Используем временную директорию
       - key: PORT
         value: 10000
-    disk:
-      name: results-storage
-      mountPath: /opt/render/data
-      sizeGB: 1
+    
     autoDeploy: true
     healthCheckPath: /health

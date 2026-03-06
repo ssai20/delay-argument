@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 COPY --from=builder /app/app .
-RUN mkdir -p /opt/render/data/results
+RUN mkdir -p /tmp/results
 
 EXPOSE 10000
 CMD ["./app"]
