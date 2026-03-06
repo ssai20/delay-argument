@@ -16,7 +16,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 COPY --from=builder /app/app .
-RUN mkdir -p /tmp/results
+# 👇 ВАЖНО: скопировать папку static
+COPY --from=builder /app/static ./static
+
+RUN mkdir -p /tmp/results && \
+    chmod +x ./app
 
 EXPOSE 10000
 CMD ["./app"]
