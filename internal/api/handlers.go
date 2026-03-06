@@ -115,6 +115,23 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 func SetupRoutes(resultsDir string) *http.ServeMux {
 	router := http.NewServeMux()
 
+	// 👇 СПЕЦИАЛЬНЫЙ ОБРАБОТЧИК для статических файлов с правильными MIME-типами
+	router.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+		// Убираем префикс /static/
+		filePath := "." + r.URL.Path
+
+		// Определяем MIME-тип по расширению
+		if strings.HasSuffix(filePath, ".css") {
+			w.Header().Set("Content-Type", "text/css")
+		} else if strings.HasSuffix(filePath, ".js") {
+			w.Header().Set("Content-Type", "application/javascript")
+		} else if strings.HasSuffix(filePath, ".html") {
+			w.Header().Set("Content-Type", "text/html")
+		}
+
+		http.ServeFile(w, r, filePath)
+	})
+
 	router.HandleFunc("/", homeHandler)
 
 	// Статические файлы (PDF результаты)
@@ -155,10 +172,12 @@ func downloadHandler(resultsDir string) http.HandlerFunc {
 	}
 }
 
+// Обновите homeHandler для правильного MIME-типа HTML
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
+	w.Header().Set("Content-Type", "text/html")
 	http.ServeFile(w, r, "./static/index.html")
 }
