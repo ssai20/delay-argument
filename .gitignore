@@ -7,3 +7,9 @@
 /dataSources/
 /dataSources.local.xml
 **/.idea/
+results/
+*.pdf
+*.tex
+*.log
+*.aux
+.DS_Store

@@ -17,7 +17,7 @@ func latexTableInitial(fileLocation string, title string) error {
 	defer writer.Flush()
 
 	lines := []string{
-		"\\documentclass[10pt,twoside]{uz_kgu}",
+		"\\documentclass[10pt,twoside]{article}",
 		"\\usepackage{inputenc}",
 		"\\usepackage[russian]{babel}",
 		"\\newcommand{\\eps}{\\varepsilon}",
