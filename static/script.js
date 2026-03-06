@@ -35,14 +35,23 @@ async function startCalculation() {
     // Отключить кнопку
     document.getElementById('calculateBtn').disabled = true;
 
+    // Получаем значения и заменяем запятые на точки
+    const epsilonStart = document.getElementById('epsilonStart').value.replace(',', '.');
+    const epsilonMin = document.getElementById('epsilonMin').value.replace(',', '.');
+    const nStart = document.getElementById('nStart').value;
+    const nMax = document.getElementById('nMax').value;
+    const delta = document.getElementById('delta').value.replace(',', '.');
+
     const requestData = {
-        epsilon_start: parseFloat(document.getElementById('epsilonStart').value),
-        epsilon_min: parseFloat(document.getElementById('epsilonMin').value),
-        n_start: parseInt(document.getElementById('nStart').value),
-        n_max: parseInt(document.getElementById('nMax').value),
-        delta: parseFloat(document.getElementById('delta').value),
+        epsilon_start: parseFloat(epsilonStart),
+        epsilon_min: parseFloat(epsilonMin),
+        n_start: parseInt(nStart),
+        n_max: parseInt(nMax),
+        delta: parseFloat(delta),
         mesh_type: document.getElementById('meshType').value
     };
+
+    console.log('Sending request:', requestData); // Для отладки
 
     try {
         const response = await fetch('/api/calculate', {
@@ -53,13 +62,22 @@ async function startCalculation() {
             body: JSON.stringify(requestData)
         });
 
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const data = await response.json();
+        console.log('Response:', data);
 
         if (data.status === 'processing') {
             startPolling(data.job_id);
+        } else {
+            showError('Неожиданный ответ от сервера');
         }
     } catch (error) {
-        showError('Ошибка при запуске расчета: ' + error);
+        console.error('Error:', error);
+        showError('Ошибка при запуске расчета: ' + error.message);
+        document.getElementById('calculateBtn').disabled = false;
     }
 }
 
