@@ -115,6 +115,8 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 func SetupRoutes(resultsDir string) *http.ServeMux {
 	router := http.NewServeMux()
 
+	router.HandleFunc("/", homeHandler)
+
 	// Статические файлы (PDF результаты)
 	router.Handle("/results/", http.StripPrefix("/results/",
 		http.FileServer(http.Dir(resultsDir))))
@@ -151,4 +153,12 @@ func downloadHandler(resultsDir string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/pdf")
 		http.ServeFile(w, r, filepath)
 	}
+}
+
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, "./static/index.html")
 }
