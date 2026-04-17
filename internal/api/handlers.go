@@ -157,7 +157,7 @@ func basicAuth(next http.HandlerFunc) http.HandlerFunc {
 		username, password, ok := r.BasicAuth()
 
 		// Проверяем (можно вынести в БД или конфиг)
-		if !ok || username != "admin" || password != "secret123" {
+		if !ok || username != "zadorin" || password != "ofim10soran" {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
