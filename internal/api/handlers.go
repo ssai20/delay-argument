@@ -132,7 +132,7 @@ func SetupRoutes(resultsDir string) *http.ServeMux {
 		http.ServeFile(w, r, filePath)
 	})
 
-	router.HandleFunc("/", homeHandler)
+	router.HandleFunc("/", basicAuth(homeHandler))
 
 	// Статические файлы (PDF результаты)
 	router.Handle("/results/", http.StripPrefix("/results/",
@@ -148,6 +148,24 @@ func SetupRoutes(resultsDir string) *http.ServeMux {
 	router.HandleFunc("/health", healthHandler)
 
 	return router
+}
+
+// Middleware для Basic Auth
+func basicAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Получаем логин и пароль из заголовка
+		username, password, ok := r.BasicAuth()
+
+		// Проверяем (можно вынести в БД или конфиг)
+		if !ok || username != "admin" || password != "secret123" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Если всё ок - идём дальше
+		next(w, r)
+	}
 }
 
 func downloadHandler(resultsDir string) http.HandlerFunc {
