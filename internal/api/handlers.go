@@ -22,6 +22,7 @@ type CalculationResponse struct {
 
 // Хранилище для отслеживания заданий
 var jobs = make(map[string]*calculator.Job)
+var counter int64
 
 func calculateHandler(resultsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +68,7 @@ func calculateHandler(resultsDir string) http.HandlerFunc {
 			JobID:  job.ID,
 			Status: "processing",
 		})
+		counter++
 	}
 }
 
@@ -146,6 +148,7 @@ func SetupRoutes(resultsDir string) *http.ServeMux {
 	router.HandleFunc("/api/status/", statusHandler)
 	router.HandleFunc("/api/mesh-types", meshTypesHandler)
 	router.HandleFunc("/health", healthHandler)
+	router.HandleFunc("/metrics", calculateCount)
 
 	return router
 }
@@ -188,6 +191,11 @@ func downloadHandler(resultsDir string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/pdf")
 		http.ServeFile(w, r, filepath)
 	}
+}
+
+func calculateCount(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(counter)
 }
 
 // Обновите homeHandler для правильного MIME-типа HTML
