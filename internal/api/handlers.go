@@ -131,8 +131,8 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status": "healthy"}`))
 }
 
-func (s *Server) SetupRoutes(resultsDir string) {
-	//router := http.NewServeMux()
+func (s *Server) SetupRoutes(resultsDir string) *http.ServeMux {
+	router := http.NewServeMux()
 
 	// 👇 СПЕЦИАЛЬНЫЙ ОБРАБОТЧИК для статических файлов с правильными MIME-типами
 	s.router.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +167,7 @@ func (s *Server) SetupRoutes(resultsDir string) {
 	s.router.HandleFunc("/health", healthHandler)
 	s.router.HandleFunc("/metrics", s.calculateCount)
 
-	//return router
+	return router
 }
 
 // Middleware для Basic Auth
