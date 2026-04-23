@@ -1,6 +1,7 @@
 package main
 
 import (
+	"delay-argument-go/cmd/db"
 	"delay-argument-go/internal/api"
 	"log"
 	"net/http"
@@ -22,8 +23,10 @@ func main() {
 		log.Fatal("Failed to create results directory:", err)
 	}
 
+	config := db.LoadConfig()
+	s := api.NewServer(config)
 	// Настраиваем маршруты
-	router := api.SetupRoutes(resultsDir)
+	router := s.SetupRoutes(resultsDir)
 
 	log.Printf("Server starting on port %s", port)
 	log.Fatal(http.ListenAndServe(":"+port, router))

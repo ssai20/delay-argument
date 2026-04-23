@@ -1,14 +1,17 @@
 package api
 
 import (
+	"database/sql"
+	"delay-argument-go/cmd/db"
 	"delay-argument-go/internal/calculator"
 	"delay-argument-go/internal/models"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"net/http"
+	"sync"
 )
 
 type CalculationResponse struct {
@@ -22,9 +25,14 @@ type CalculationResponse struct {
 
 // Хранилище для отслеживания заданий
 var jobs = make(map[string]*calculator.Job)
-var counter int64
 
-func calculateHandler(resultsDir string) http.HandlerFunc {
+// var counter int64
+var (
+	counter int64
+	mu      sync.RWMutex
+)
+
+func (s *Server) calculateHandler(resultsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -68,7 +76,16 @@ func calculateHandler(resultsDir string) http.HandlerFunc {
 			JobID:  job.ID,
 			Status: "processing",
 		})
-		counter++
+		//atomic.AddInt64(&counter, 1)
+		//mu.Lock()
+		//counter++
+		//mu.Unlock()
+
+		err := s.saveCounter()
+		if err != nil {
+			fmt.Errorf("%w", err)
+		}
+
 	}
 }
 
@@ -114,11 +131,11 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status": "healthy"}`))
 }
 
-func SetupRoutes(resultsDir string) *http.ServeMux {
-	router := http.NewServeMux()
+func (s *Server) SetupRoutes(resultsDir string) {
+	//router := http.NewServeMux()
 
 	// 👇 СПЕЦИАЛЬНЫЙ ОБРАБОТЧИК для статических файлов с правильными MIME-типами
-	router.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+	s.router.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
 		// Убираем префикс /static/
 		filePath := "." + r.URL.Path
 
@@ -134,23 +151,23 @@ func SetupRoutes(resultsDir string) *http.ServeMux {
 		http.ServeFile(w, r, filePath)
 	})
 
-	router.HandleFunc("/", basicAuth(homeHandler))
+	s.router.HandleFunc("/", basicAuth(homeHandler))
 
 	// Статические файлы (PDF результаты)
-	router.Handle("/results/", http.StripPrefix("/results/",
+	s.router.Handle("/results/", http.StripPrefix("/results/",
 		http.FileServer(http.Dir(resultsDir))))
 
 	// Добавить прямой download URL
-	router.HandleFunc("/download/", downloadHandler(resultsDir))
+	s.router.HandleFunc("/download/", downloadHandler(resultsDir))
 
 	// API endpoints
-	router.HandleFunc("/api/calculate", calculateHandler(resultsDir))
-	router.HandleFunc("/api/status/", statusHandler)
-	router.HandleFunc("/api/mesh-types", meshTypesHandler)
-	router.HandleFunc("/health", healthHandler)
-	router.HandleFunc("/metrics", calculateCount)
+	s.router.HandleFunc("/api/calculate", s.calculateHandler(resultsDir))
+	s.router.HandleFunc("/api/status/", statusHandler)
+	s.router.HandleFunc("/api/mesh-types", meshTypesHandler)
+	s.router.HandleFunc("/health", healthHandler)
+	s.router.HandleFunc("/metrics", s.calculateCount)
 
-	return router
+	//return router
 }
 
 // Middleware для Basic Auth
@@ -193,9 +210,86 @@ func downloadHandler(resultsDir string) http.HandlerFunc {
 	}
 }
 
-func calculateCount(w http.ResponseWriter, r *http.Request) {
+type Server struct {
+	db     *sql.DB
+	router *http.ServeMux
+}
+
+func NewServer(config *db.Config) *Server {
+	config = db.LoadConfig()
+	dB, err := initDB(config)
+	if err != nil {
+		fmt.Errorf("new database initiation failed: %w", err)
+	}
+	return &Server{
+		db:     dB,
+		router: http.NewServeMux(),
+	}
+}
+
+func (s *Server) calculateCount(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(counter)
+	//json.NewEncoder(w).Encode(atomic.LoadInt64(&counter))
+	//mu.RLock()
+	//c := counter
+	//mu.RUnlock()
+	c, err := s.getCounter()
+	if err != nil {
+		fmt.Errorf("%w", err)
+	}
+	json.NewEncoder(w).Encode(c)
+}
+
+func initDB(config *db.Config) (*sql.DB, error) {
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", config.DBUser, config.DBPassword, config.DBHost, config.DBPort, config.DBName, config.DBSSLMode)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to opern database: %w", err)
+	}
+
+	if err := createTable(db); err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+func createTable(db *sql.DB) error {
+	query := `
+CREATE TABLE IF NOT EXISTS counter_ids (
+    id SERIAL PRIMARY KEY,
+    counter VARCHAR(100) UNIQUE NOT NULL
+);
+`
+	if _, err := db.Exec(query); err != nil {
+		return fmt.Errorf("failed to create table: %w", err)
+	}
+	return nil
+}
+
+func (s *Server) saveCounter() error {
+	query := `
+UPDATE counter_ids
+SET counter = counter + 1
+WHERE id =1
+`
+	err, _ := s.db.Exec(query)
+	if err != nil {
+		return fmt.Errorf("counter can't save: %w", err)
+	}
+	return nil
+}
+
+func (s *Server) getCounter() (int64, error) {
+	query := `
+SELECT counter
+FROM counter_ids 
+WHERE id = 1
+`
+	err := s.db.QueryRow(query).Scan(&counter)
+	if err != nil {
+		return 0, fmt.Errorf("counter can't getting: %w", err)
+	}
+	return counter, nil
 }
 
 // Обновите homeHandler для правильного MIME-типа HTML

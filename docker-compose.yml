@@ -8,3 +8,4 @@ services:
       - ./results:/app/results
     environment:
       - RESULTS_DIR=/app/results
+      
