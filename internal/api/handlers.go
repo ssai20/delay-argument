@@ -264,6 +264,16 @@ CREATE TABLE IF NOT EXISTS counter_ids (
 	if _, err := db.Exec(query); err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
 	}
+
+	insertQuery := `
+INSERT INTO counter_ids (id, counter)
+SELECT 1,0
+WHERE NOT EXISTS (SELECT 1 FROM counter_ids WHERE id = 1);
+`
+	_, err := db.Exec(insertQuery)
+	if err != nil {
+		return fmt.Errorf("failed to insert  initial counter: %w", err)
+	}
 	return nil
 }
 
