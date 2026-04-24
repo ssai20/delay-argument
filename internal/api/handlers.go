@@ -135,7 +135,7 @@ func (s *Server) SetupRoutes(resultsDir string) *http.ServeMux {
 	router := http.NewServeMux()
 
 	// 👇 СПЕЦИАЛЬНЫЙ ОБРАБОТЧИК для статических файлов с правильными MIME-типами
-	s.router.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
 		// Убираем префикс /static/
 		filePath := "." + r.URL.Path
 
@@ -151,21 +151,21 @@ func (s *Server) SetupRoutes(resultsDir string) *http.ServeMux {
 		http.ServeFile(w, r, filePath)
 	})
 
-	s.router.HandleFunc("/", basicAuth(homeHandler))
+	router.HandleFunc("/", basicAuth(homeHandler))
 
 	// Статические файлы (PDF результаты)
-	s.router.Handle("/results/", http.StripPrefix("/results/",
+	router.Handle("/results/", http.StripPrefix("/results/",
 		http.FileServer(http.Dir(resultsDir))))
 
 	// Добавить прямой download URL
-	s.router.HandleFunc("/download/", downloadHandler(resultsDir))
+	router.HandleFunc("/download/", downloadHandler(resultsDir))
 
 	// API endpoints
-	s.router.HandleFunc("/api/calculate", s.calculateHandler(resultsDir))
-	s.router.HandleFunc("/api/status/", statusHandler)
-	s.router.HandleFunc("/api/mesh-types", meshTypesHandler)
-	s.router.HandleFunc("/health", healthHandler)
-	s.router.HandleFunc("/metrics", s.calculateCount)
+	router.HandleFunc("/api/calculate", s.calculateHandler(resultsDir))
+	router.HandleFunc("/api/status/", statusHandler)
+	router.HandleFunc("/api/mesh-types", meshTypesHandler)
+	router.HandleFunc("/health", healthHandler)
+	router.HandleFunc("/metrics", s.calculateCount)
 
 	return router
 }
@@ -216,7 +216,7 @@ type Server struct {
 }
 
 func NewServer(config *db.Config) *Server {
-	config = db.LoadConfig()
+
 	dB, err := initDB(config)
 	if err != nil {
 		fmt.Errorf("new database initiation failed: %w", err)
@@ -272,7 +272,7 @@ UPDATE counter_ids
 SET counter = counter + 1
 WHERE id =1
 `
-	err, _ := s.db.Exec(query)
+	_, err := s.db.Exec(query)
 	if err != nil {
 		return fmt.Errorf("counter can't save: %w", err)
 	}
