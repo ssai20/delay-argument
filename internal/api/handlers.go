@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	_ "github.com/lib/pq"
 	"delay-argument-go/cmd/db"
 	"delay-argument-go/internal/calculator"
 	"delay-argument-go/internal/models"
