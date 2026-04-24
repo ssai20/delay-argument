@@ -7,12 +7,15 @@ import (
 	"delay-argument-go/internal/models"
 	"encoding/json"
 	"fmt"
-	_ "github.com/lib/pq"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
+
+	_ "github.com/lib/pq"
 )
 
 type CalculationResponse struct {
@@ -84,7 +87,7 @@ func (s *Server) calculateHandler(resultsDir string) http.HandlerFunc {
 
 		err := s.saveCounter()
 		if err != nil {
-			fmt.Errorf("%w", err)
+			log.Printf("Failed to save couner: %v", err)
 		}
 
 	}
@@ -217,10 +220,13 @@ type Server struct {
 }
 
 func NewServer(config *db.Config) *Server {
-
 	dB, err := initDB(config)
 	if err != nil {
-		fmt.Errorf("new database initiation failed: %w", err)
+		log.Printf("new database initiation failed: %w", err)
+		return &Server{
+			db:     nil,
+			router: http.NewServeMux(),
+		}
 	}
 	return &Server{
 		db:     dB,
@@ -236,16 +242,28 @@ func (s *Server) calculateCount(w http.ResponseWriter, r *http.Request) {
 	//mu.RUnlock()
 	c, err := s.getCounter()
 	if err != nil {
-		fmt.Errorf("%w", err)
+		http.Error(w, "Failed calculate counting", http.StatusInternalServerError)
+		return
 	}
 	json.NewEncoder(w).Encode(c)
 }
 
 func initDB(config *db.Config) (*sql.DB, error) {
 	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", config.DBUser, config.DBPassword, config.DBHost, config.DBPort, config.DBName, config.DBSSLMode)
-	db, err := sql.Open("postgres", connStr)
+
+	var db *sql.DB
+	var err error
+
+	for i := 0; i < 10; i++ {
+		db, err = sql.Open("postgres", connStr)
+		if err != nil {
+			time.Sleep(3 * time.Second)
+			continue
+		}
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to opern database: %w", err)
+		return nil, fmt.Errorf("failed to open database after retries: %w", err)
 	}
 
 	if err := createTable(db); err != nil {
