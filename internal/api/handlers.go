@@ -2,12 +2,12 @@ package api
 
 import (
 	"database/sql"
-	_ "github.com/lib/pq"
 	"delay-argument-go/cmd/db"
 	"delay-argument-go/internal/calculator"
 	"delay-argument-go/internal/models"
 	"encoding/json"
 	"fmt"
+	_ "github.com/lib/pq"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -258,7 +258,7 @@ func createTable(db *sql.DB) error {
 	query := `
 CREATE TABLE IF NOT EXISTS counter_ids (
     id SERIAL PRIMARY KEY,
-    counter VARCHAR(100) UNIQUE NOT NULL
+    counter BIGINT DEFAULT 0
 );
 `
 	if _, err := db.Exec(query); err != nil {
@@ -271,7 +271,7 @@ func (s *Server) saveCounter() error {
 	query := `
 UPDATE counter_ids
 SET counter = counter + 1
-WHERE id =1
+WHERE id = 1
 `
 	_, err := s.db.Exec(query)
 	if err != nil {
