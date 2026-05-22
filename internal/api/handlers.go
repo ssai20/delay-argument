@@ -273,22 +273,32 @@ func initDB(config *db.Config) (*sql.DB, error) {
 }
 
 func createTable(db *sql.DB) error {
-	query := `
-CREATE TABLE IF NOT EXISTS counter_ids (
+	// Сначала проверим, какая схема доступна
+	var schema string
+	querySchema := `SELECT current_schema();`
+	err := db.QueryRow(querySchema).Scan(&schema)
+	if err != nil {
+		log.Printf("Warning: could not get current schema: %v", err)
+		schema = "public"
+	}
+	log.Printf("Using schema: %s", schema)
+
+	query := fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %s.counter_ids (
     id SERIAL PRIMARY KEY,
     counter BIGINT DEFAULT 0
 );
-`
+`, schema)
 	if _, err := db.Exec(query); err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
 	}
 
-	insertQuery := `
-INSERT INTO counter_ids (id, counter)
+	insertQuery := fmt.Sprintf(`
+INSERT INTO %s.counter_ids (id, counter)
 SELECT 1,0
-WHERE NOT EXISTS (SELECT 1 FROM counter_ids WHERE id = 1);
-`
-	_, err := db.Exec(insertQuery)
+WHERE NOT EXISTS (SELECT 1 FROM %s.counter_ids WHERE id = 1);
+`, schema, schema)
+	_, err = db.Exec(insertQuery)
 	if err != nil {
 		return fmt.Errorf("failed to insert  initial counter: %w", err)
 	}
@@ -296,12 +306,21 @@ WHERE NOT EXISTS (SELECT 1 FROM counter_ids WHERE id = 1);
 }
 
 func (s *Server) saveCounter() error {
-	query := `
-UPDATE counter_ids
+	// Получаем текущую схему
+	var schema string
+	querySchema := `SELECT current_schema();`
+	err := s.db.QueryRow(querySchema).Scan(&schema)
+	if err != nil {
+		log.Printf("Warning: could not get current schema: %v", err)
+		schema = "public"
+	}
+
+	query := fmt.Sprintf(`
+UPDATE %s.counter_ids
 SET counter = counter + 1
 WHERE id = 1
-`
-	_, err := s.db.Exec(query)
+`, schema)
+	_, err = s.db.Exec(query)
 	if err != nil {
 		return fmt.Errorf("counter can't save: %w", err)
 	}
@@ -309,12 +328,21 @@ WHERE id = 1
 }
 
 func (s *Server) getCounter() (int64, error) {
-	query := `
+	// Получаем текущую схему
+	var schema string
+	querySchema := `SELECT current_schema();`
+	err := s.db.QueryRow(querySchema).Scan(&schema)
+	if err != nil {
+		log.Printf("Warning: could not get current schema: %v", err)
+		schema = "public"
+	}
+
+	query := fmt.Sprintf(`
 SELECT counter
 FROM counter_ids 
 WHERE id = 1
-`
-	err := s.db.QueryRow(query).Scan(&counter)
+`, schema)
+	err = s.db.QueryRow(query).Scan(&counter)
 	if err != nil {
 		return 0, fmt.Errorf("counter can't getting: %w", err)
 	}
