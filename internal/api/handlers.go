@@ -248,59 +248,115 @@ func (s *Server) calculateCount(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(c)
 }
 
+const (
+	appSchema = "app_schema"
+)
+
 func initDB(config *db.Config) (*sql.DB, error) {
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", config.DBUser, config.DBPassword, config.DBHost, config.DBPort, config.DBName, config.DBSSLMode)
+	// Формируем connection string с search_path
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s&search_path=%s",
+		config.DBUser, config.DBPassword,
+		config.DBHost, config.DBPort,
+		config.DBName, config.DBSSLMode,
+		appSchema)
+
+	log.Printf("Connecting to database with search_path=%s", appSchema)
 
 	var db *sql.DB
 	var err error
 
+	// Пытаемся подключиться несколько раз
 	for i := 0; i < 10; i++ {
 		db, err = sql.Open("postgres", connStr)
 		if err != nil {
+			log.Printf("Attempt %d: sql.Open failed: %v", i+1, err)
 			time.Sleep(3 * time.Second)
 			continue
 		}
+
+		// Проверяем соединение
+		if err = db.Ping(); err != nil {
+			log.Printf("Attempt %d: Ping failed: %v", i+1, err)
+			db.Close()
+			time.Sleep(3 * time.Second)
+			continue
+		}
+
+		// Создаем схему если её нет
+		_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", appSchema))
+		if err != nil {
+			log.Printf("Warning: could not create schema: %v", err)
+			// Продолжаем, возможно схема уже есть
+		}
+
+		// Проверяем права
+		var hasUsage bool
+		err = db.QueryRow(fmt.Sprintf(`
+            SELECT has_schema_privilege(current_user, '%s', 'USAGE')
+        `, appSchema)).Scan(&hasUsage)
+		if err == nil && hasUsage {
+			log.Printf("Successfully connected and have access to schema '%s'", appSchema)
+			break
+		}
+
+		log.Printf("No access to schema '%s', retrying...", appSchema)
+		db.Close()
+		time.Sleep(3 * time.Second)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database after retries: %w", err)
+		return nil, fmt.Errorf("failed to connect to database after retries: %w", err)
 	}
 
 	if err := createTable(db); err != nil {
+		db.Close()
 		return nil, err
 	}
+
 	return db, nil
 }
 
 func createTable(db *sql.DB) error {
-	query := `
-CREATE TABLE IF NOT EXISTS counter_ids (
-    id SERIAL PRIMARY KEY,
-    counter BIGINT DEFAULT 0
-);
-`
+	// Явно указываем схему
+	query := fmt.Sprintf(`
+        CREATE TABLE IF NOT EXISTS %s.counter_ids (
+            id SERIAL PRIMARY KEY,
+            counter BIGINT DEFAULT 0
+        )
+    `, appSchema)
+
 	if _, err := db.Exec(query); err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
 	}
 
-	insertQuery := `
-INSERT INTO counter_ids (id, counter)
-SELECT 1,0
-WHERE NOT EXISTS (SELECT 1 FROM counter_ids WHERE id = 1);
-`
+	insertQuery := fmt.Sprintf(`
+        INSERT INTO %s.counter_ids (id, counter)
+        SELECT 1, 0
+        WHERE NOT EXISTS (
+            SELECT 1 FROM %s.counter_ids WHERE id = 1
+        )
+    `, appSchema, appSchema)
+
 	_, err := db.Exec(insertQuery)
 	if err != nil {
-		return fmt.Errorf("failed to insert  initial counter: %w", err)
+		return fmt.Errorf("failed to insert initial counter: %w", err)
 	}
+
+	log.Printf("Table %s.counter_ids is ready", appSchema)
 	return nil
 }
 
 func (s *Server) saveCounter() error {
-	query := `
-UPDATE counter_ids
-SET counter = counter + 1
-WHERE id = 1
-`
+	if s.db == nil {
+		return fmt.Errorf("database connection not available")
+	}
+
+	query := fmt.Sprintf(`
+        UPDATE %s.counter_ids
+        SET counter = counter + 1
+        WHERE id = 1
+    `, appSchema)
+
 	_, err := s.db.Exec(query)
 	if err != nil {
 		return fmt.Errorf("counter can't save: %w", err)
@@ -309,14 +365,20 @@ WHERE id = 1
 }
 
 func (s *Server) getCounter() (int64, error) {
-	query := `
-SELECT counter
-FROM counter_ids 
-WHERE id = 1
-`
+	if s.db == nil {
+		return 0, fmt.Errorf("database connection not available")
+	}
+
+	var counter int64
+	query := fmt.Sprintf(`
+        SELECT counter
+        FROM %s.counter_ids 
+        WHERE id = 1
+    `, appSchema)
+
 	err := s.db.QueryRow(query).Scan(&counter)
 	if err != nil {
-		return 0, fmt.Errorf("counter can't getting: %w", err)
+		return 0, fmt.Errorf("counter can't get: %w", err)
 	}
 	return counter, nil
 }
