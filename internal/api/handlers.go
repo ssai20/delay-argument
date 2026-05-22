@@ -249,7 +249,7 @@ func (s *Server) calculateCount(w http.ResponseWriter, r *http.Request) {
 }
 
 func initDB(config *db.Config) (*sql.DB, error) {
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s&search_path=public", config.DBUser, config.DBPassword, config.DBHost, config.DBPort, config.DBName, config.DBSSLMode)
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", config.DBUser, config.DBPassword, config.DBHost, config.DBPort, config.DBName, config.DBSSLMode)
 
 	var db *sql.DB
 	var err error
@@ -273,32 +273,22 @@ func initDB(config *db.Config) (*sql.DB, error) {
 }
 
 func createTable(db *sql.DB) error {
-	// Сначала проверим, какая схема доступна
-	var schema string
-	querySchema := `SELECT current_schema();`
-	err := db.QueryRow(querySchema).Scan(&schema)
-	if err != nil {
-		log.Printf("Warning: could not get current schema: %v", err)
-		schema = "public"
-	}
-	log.Printf("Using schema: %s", schema)
-
-	query := fmt.Sprintf(`
-CREATE TABLE IF NOT EXISTS %s.counter_ids (
+	query := `
+CREATE TABLE IF NOT EXISTS counter_ids (
     id SERIAL PRIMARY KEY,
     counter BIGINT DEFAULT 0
 );
-`, schema)
+`
 	if _, err := db.Exec(query); err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
 	}
 
-	insertQuery := fmt.Sprintf(`
-INSERT INTO %s.counter_ids (id, counter)
+	insertQuery := `
+INSERT INTO counter_ids (id, counter)
 SELECT 1,0
-WHERE NOT EXISTS (SELECT 1 FROM %s.counter_ids WHERE id = 1);
-`, schema, schema)
-	_, err = db.Exec(insertQuery)
+WHERE NOT EXISTS (SELECT 1 FROM counter_ids WHERE id = 1);
+`
+	_, err := db.Exec(insertQuery)
 	if err != nil {
 		return fmt.Errorf("failed to insert  initial counter: %w", err)
 	}
@@ -306,21 +296,12 @@ WHERE NOT EXISTS (SELECT 1 FROM %s.counter_ids WHERE id = 1);
 }
 
 func (s *Server) saveCounter() error {
-	// Получаем текущую схему
-	var schema string
-	querySchema := `SELECT current_schema();`
-	err := s.db.QueryRow(querySchema).Scan(&schema)
-	if err != nil {
-		log.Printf("Warning: could not get current schema: %v", err)
-		schema = "public"
-	}
-
-	query := fmt.Sprintf(`
-UPDATE %s.counter_ids
+	query := `
+UPDATE counter_ids
 SET counter = counter + 1
 WHERE id = 1
-`, schema)
-	_, err = s.db.Exec(query)
+`
+	_, err := s.db.Exec(query)
 	if err != nil {
 		return fmt.Errorf("counter can't save: %w", err)
 	}
@@ -328,21 +309,12 @@ WHERE id = 1
 }
 
 func (s *Server) getCounter() (int64, error) {
-	// Получаем текущую схему
-	var schema string
-	querySchema := `SELECT current_schema();`
-	err := s.db.QueryRow(querySchema).Scan(&schema)
-	if err != nil {
-		log.Printf("Warning: could not get current schema: %v", err)
-		schema = "public"
-	}
-
-	query := fmt.Sprintf(`
+	query := `
 SELECT counter
-FROM %s.counter_ids 
+FROM counter_ids 
 WHERE id = 1
-`, schema)
-	err = s.db.QueryRow(query).Scan(&counter)
+`
+	err := s.db.QueryRow(query).Scan(&counter)
 	if err != nil {
 		return 0, fmt.Errorf("counter can't getting: %w", err)
 	}
