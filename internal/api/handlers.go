@@ -339,7 +339,7 @@ func (s *Server) getCounter() (int64, error) {
 
 	query := fmt.Sprintf(`
 SELECT counter
-FROM counter_ids 
+FROM %s.counter_ids 
 WHERE id = 1
 `, schema)
 	err = s.db.QueryRow(query).Scan(&counter)
